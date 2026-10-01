@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>サークルご飯代計算機</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;background:#f5f6f8;margin:0;color:#222}
+  .wrap{max-width:720px;margin:auto;padding:18px}
+  h1{font-size:24px;margin:4px 0 18px}
+  .card{background:white;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px #0000000d}
+  h2{font-size:17px;margin:0 0 14px}
+  .row{display:grid;grid-template-columns:1fr 120px;gap:10px;align-items:center;margin:10px 0}
+  label{font-weight:600}
+  input{width:100%;padding:11px 10px;border:1px solid #d7d9de;border-radius:10px;font-size:16px;background:#fff}
+  .hint{font-size:12px;color:#666;margin-top:6px}
+  .btn{width:100%;border:0;border-radius:12px;padding:13px;font-size:17px;font-weight:700;cursor:pointer}
+  .main{background:#222;color:white}
+  .sub{background:#eef0f3;color:#222;margin-top:9px}
+  .result{font-size:16px}
+  .result-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .person{padding:12px;background:#f7f7f8;border-radius:12px}
+  .person b{display:block;font-size:20px;margin-top:3px}
+  .ok{padding:12px;border-radius:12px;background:#eaf7ee;margin-top:12px}
+  .warn{padding:12px;border-radius:12px;background:#fff3df;margin-top:12px}
+  .small{font-size:13px;color:#555}
+  .mono{font-variant-numeric:tabular-nums}
+  @media(max-width:480px){.row{grid-template-columns:1fr 105px}.result-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🍚 サークルご飯代計算機</h1>
+
+  <div class="card">
+    <h2>① 今回の人数・金額</h2>
+    <div class="row"><label>店の合計金額</label><input id="total" type="number" min="0" step="100" value="30000"></div>
+    <div class="row"><label>1回生の人数</label><input id="n1" type="number" min="0" step="1" value="3"></div>
+    <div class="row"><label>2回生の人数</label><input id="n2" type="number" min="0" step="1" value="5"></div>
+    <div class="row"><label>3回生の人数</label><input id="n3" type="number" min="0" step="1" value="3"></div>
+    <div class="row"><label>4回生の人数</label><input id="n4" type="number" min="0" step="1" value="2"></div>
+  </div>
+
+  <div class="card">
+    <h2>② 負担係数</h2>
+    <div class="row"><label>1回生</label><input id="c1" type="number" min="0" step="0.05" value="0"></div>
+    <div class="row"><label>2回生</label><input id="c2" type="number" min="0" step="0.05" value="1"></div>
+    <div class="row"><label>3回生</label><input id="c3" type="number" min="0" step="0.05" value="1.25"></div>
+    <div class="row"><label>4回生</label><input id="c4" type="number" min="0" step="0.05" value="1.5"></div>
+    <div class="hint">初期値は 1回生無料、2:3:4回生＝1:1.25:1.5</div>
+  </div>
+
+  <div class="card">
+    <h2>③ 100円単位の丸め方</h2>
+    <div class="row">
+      <label>1人あたり金額を</label>
+      <select id="roundMode" style="padding:11px;border:1px solid #d7d9de;border-radius:10px;font-size:16px">
+        <option value="nearest">四捨五入</option>
+        <option value="down">切り捨て</option>
+        <option value="up">切り上げ</option>
+      </select>
+    </div>
+    <div class="hint">※丸めるのは各学年の「1人あたり金額」です。</div>
+  </div>
+
+  <button class="btn main" onclick="calc()">計算する</button>
+
+  <div class="card result" id="output" style="margin-top:14px">
+    <div class="small">人数と係数を入力して「計算する」を押してください。</div>
+  </div>
+</div>
+
+<script>
+function yen(x){return Math.round(x).toLocaleString("ja-JP")+"円";}
+function round100(x,mode){
+  if(mode==="down") return Math.floor(x/100)*100;
+  if(mode==="up") return Math.ceil(x/100)*100;
+  return Math.round(x/100)*100;
+}
+function val(id){return Number(document.getElementById(id).value)||0;}
+
+function calc(){
+  const total=val("total");
+  const ns=[val("n1"),val("n2"),val("n3"),val("n4")];
+  const cs=[val("c1"),val("c2"),val("c3"),val("c4")];
+  const mode=document.getElementById("roundMode").value;
+
+  const weighted=ns.reduce((s,n,i)=>s+n*cs[i],0);
+  const base=weighted>0?total/weighted:0;
+  const raw=cs.map(c=>c*base);
+  const pay=raw.map((x,i)=>ns[i]>0?round100(x,mode):0);
+
+  // 1回生は係数0なら無料。係数を変更した場合はその係数に従う。
+  const collected=ns.reduce((s,n,i)=>s+n*pay[i],0);
+  const diff=Math.abs(collected-total);
+  const p2=pay[1], p4=pay[3];
+  const gap=Math.abs(p4-p2);
+
+  let html="<h2>計算結果</h2><div class='result-grid'>";
+  for(let i=0;i<4;i++){
+    html+=`<div class="person">${i+1}回生・${ns[i]}人<b class="mono">${yen(pay[i])}</b><span class="small">係数 ${cs[i]}</span></div>`;
+  }
+  html+="</div>";
+  html+=`<div class="ok"><b>2回生 ↔ 4回生の差額：${yen(gap)}</b><br><span class="small">${gap<1000?"1,000円未満です。":"1,000円以上です。"}</span></div>`;
+  html+=`<div class="${diff===0?'ok':'warn'}"><b>実際に集まる金額：${yen(collected)}</b><br><span class="small">店の合計：${yen(total)} ／ 差額：${yen(diff)}</span></div>`;
+  if(diff!==0){
+    html+=`<div class="warn"><b>集金額と店の合計が一致していません。</b><br><span class="small">100円単位で丸めたためです。係数を調整するか、最後に誰かの支払額を${yen(diff)}分だけ調整してください。</span></div>`;
+  }
+  html+=`<div style="margin-top:12px" class="small">丸め前：2回生 ${yen(raw[1])} ／ 3回生 ${yen(raw[2])} ／ 4回生 ${yen(raw[3])}</div>`;
+  document.getElementById("output").innerHTML=html;
+}
+calc();
+</script>
+</body>
+</html>
