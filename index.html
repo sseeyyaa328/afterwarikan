@@ -358,360 +358,149 @@ button.secondary {
 
 
 <script>
-
-/* 数値を取得する関数 */
 function getValue(id) {
-
-  const value =
-    Number(document.getElementById(id).value);
-
-  return Math.max(0, value || 0);
+  return Math.max(0, Number(document.getElementById(id).value) || 0);
 }
 
-
-/* 計算 */
 function calculate() {
-
   const people = [
-
-    {
-      year: "1回生",
-      n: Math.floor(getValue("n1")),
-      coefficient: getValue("c1")
-    },
-
-    {
-      year: "2回生",
-      n: Math.floor(getValue("n2")),
-      coefficient: getValue("c2")
-    },
-
-    {
-      year: "3回生",
-      n: Math.floor(getValue("n3")),
-      coefficient: getValue("c3")
-    },
-
-    {
-      year: "4回生以上",
-      n: Math.floor(getValue("n4")),
-      coefficient: getValue("c4")
-    }
-
+    { year: "1回生", n: Math.floor(getValue("n1")), coefficient: 0 },
+    { year: "2回生", n: Math.floor(getValue("n2")), coefficient: getValue("c2") },
+    { year: "3回生", n: Math.floor(getValue("n3")), coefficient: getValue("c3") },
+    { year: "4回生以上", n: Math.floor(getValue("n4")), coefficient: getValue("c4") }
   ];
 
-
-  const total =
-    Math.round(getValue("total"));
-
+  const total = getValue("total");
+  const firstPrice = getValue("firstPrice");
 
   if (total <= 0) {
-
     alert("合計金額を入力してください。");
-
     return;
   }
 
+  // 1回生の固定料金を差し引く
+  const firstYearCost = people[0].n * firstPrice;
+  const remaining = total - firstYearCost;
 
-  /*
-    支払う人全体の負担係数を計算
-  */
-
-  let totalWeight = 0;
-
-  people.forEach(person => {
-
-    if (
-      person.n > 0 &&
-      person.coefficient > 0
-    ) {
-
-      totalWeight +=
-        person.n * person.coefficient;
-
-    }
-
-  });
-
-
-  if (totalWeight <= 0) {
-
-    alert(
-      "参加人数と負担係数を確認してください。"
-    );
-
+  if (remaining < 0) {
+    alert("1回生の料金だけで合計金額を超えています。");
     return;
   }
 
+  // 2～4回生の負担係数の合計
+  const payingPeople = people.slice(1).filter(p => p.n > 0 && p.coefficient > 0);
 
-  /*
-    まず理論上の1人あたり金額を計算
-  */
+  const totalWeight = payingPeople.reduce(
+    (sum, p) => sum + p.n * p.coefficient,
+    0
+  );
 
-  people.forEach(person => {
+  if (remaining > 0 && totalWeight <= 0) {
+    alert("2～4回生の人数と負担係数を確認してください。");
+    return;
+  }
 
-    if (
-      person.n > 0 &&
-      person.coefficient > 0
-    ) {
+  // 1回生の料金を固定
+  people[0].price = firstPrice;
 
-      person.rawPrice =
-        total *
-        person.coefficient /
-        totalWeight;
-
+  // 2～4回生の料金を計算
+  people.slice(1).forEach(person => {
+    if (person.n > 0 && person.coefficient > 0) {
+      const rawPrice = remaining * person.coefficient / totalWeight;
+      person.price = Math.floor(rawPrice / 100) * 100;
     } else {
-
-      person.rawPrice = 0;
-
-    }
-
-  });
-
-
-  /*
-    100円単位に切り下げ
-  */
-
-  people.forEach(person => {
-
-    if (person.coefficient > 0) {
-
-      person.price =
-        Math.floor(
-          person.rawPrice / 100
-        ) * 100;
-
-    } else {
-
       person.price = 0;
-
     }
-
   });
 
+  // 集金予定額を計算
+  let collected = people.reduce(
+    (sum, p) => sum + p.price * p.n,
+    0
+  );
 
-  /*
-    100円単位で不足分を調整
-  */
-
-  let collected = 0;
-
-  people.forEach(person => {
-
-    collected +=
-      person.price * person.n;
-
-  });
-
-
-  let difference =
-    total - collected;
-
-
-  /*
-    端数が大きい学年から100円ずつ追加
-  */
-
-  const candidates =
-    people
-      .filter(person =>
-        person.n > 0 &&
-        person.coefficient > 0
-      )
-      .sort((a, b) => {
-
-        const remainderA =
-          a.rawPrice % 100;
-
-        const remainderB =
-          b.rawPrice % 100;
-
-        return remainderB - remainderA;
-
-      });
-
+  // 100円単位で不足分を調整
+  let difference = total - collected;
+  let candidates = people.slice(1)
+    .filter(p => p.n > 0 && p.coefficient > 0);
 
   let safety = 0;
 
-
-  while (
-    difference >= 100 &&
-    candidates.length > 0 &&
-    safety < 10000
-  ) {
+  while (difference >= 100 && candidates.length > 0 && safety < 10000) {
+    let changed = false;
 
     for (const person of candidates) {
-
-      if (difference < 100) {
-        break;
+      if (difference >= person.n * 100) {
+        person.price += 100;
+        difference -= person.n * 100;
+        changed = true;
       }
-
-      person.price += 100;
-
-      difference -=
-        person.n * 100;
-
     }
 
+    if (!changed) break;
     safety++;
-
   }
 
+  collected = people.reduce(
+    (sum, p) => sum + p.price * p.n,
+    0
+  );
 
-  /*
-    最終的な集金額
-  */
-
-  collected = 0;
-
-  people.forEach(person => {
-
-    collected +=
-      person.price * person.n;
-
-  });
-
-
-  /*
-    結果を表示
-  */
-
-  const results =
-    document.getElementById("results");
-
+  // 結果表示
+  const results = document.getElementById("results");
   results.innerHTML = "";
 
-
   people.forEach(person => {
+    const row = document.createElement("div");
+    row.className = "result-row";
 
-    const row =
-      document.createElement("div");
-
-    row.className =
-      "result-row";
-
-
-    const left =
-      document.createElement("div");
-
+    const left = document.createElement("div");
     left.innerHTML = `
-      <div class="year">
-        ${person.year}
-      </div>
-
-      <div class="people">
-        ${person.n}人
-      </div>
+      <div class="year">${person.year}</div>
+      <div class="people">${person.n}人</div>
     `;
 
-
-    const right =
-      document.createElement("div");
-
-    right.className =
-      "price";
-
-
-    if (
-      person.coefficient === 0 ||
-      person.n === 0
-    ) {
-
-      right.innerHTML =
-        '<span class="free">無料</span>';
-
-    } else {
-
-      right.textContent =
-        person.price.toLocaleString()
-        + "円";
-
-    }
-
+    const right = document.createElement("div");
+    right.className = "price";
+    right.textContent = person.price.toLocaleString() + "円";
 
     row.appendChild(left);
-
     row.appendChild(right);
-
     results.appendChild(row);
-
   });
 
+  document.getElementById("collection").textContent =
+    collected.toLocaleString() + "円";
 
-  /*
-    集金予定額
-  */
-
-  document.getElementById(
-    "collection"
-  ).textContent =
-    collected.toLocaleString()
-    + "円";
-
-
-  /*
-    差額表示
-  */
-
-  const warning =
-    document.getElementById("warning");
-
+  const warning = document.getElementById("warning");
 
   if (collected !== total) {
-
-    warning.style.display =
-      "block";
-
+    warning.style.display = "block";
     warning.textContent =
-      "お店の合計金額と集金額に "
-      +
-      Math.abs(total - collected)
-        .toLocaleString()
-      +
-      "円の差があります。";
-
+      "合計金額との差額は " +
+      (total - collected).toLocaleString() + "円です。";
   } else {
-
-    warning.style.display =
-      "none";
-
+    warning.style.display = "none";
   }
 
-
-  /*
-    結果カードを表示
-  */
-
-  document.getElementById(
-    "resultCard"
-  ).style.display =
-    "block";
-
+  document.getElementById("resultCard").style.display = "block";
 }
 
-
-/* リセット */
 function resetForm() {
-
   document.getElementById("n1").value = 0;
   document.getElementById("n2").value = 0;
   document.getElementById("n3").value = 0;
   document.getElementById("n4").value = 0;
 
-  document.getElementById("c1").value = 0;
+  document.getElementById("firstPrice").value = 0;
+
   document.getElementById("c2").value = 1;
   document.getElementById("c3").value = 1.25;
   document.getElementById("c4").value = 1.5;
 
   document.getElementById("total").value = "";
-
-  document.getElementById(
-    "resultCard"
-  ).style.display = "none";
-
+  document.getElementById("resultCard").style.display = "none";
 }
-
 </script>
 
 </body>
